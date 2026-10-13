@@ -1950,6 +1950,7 @@ nlohmann::json MoonrakerPrinterAgent::build_print_payload_locked() const
     payload["print"]["home_flag"]                = home_flag;
     payload["print"]["sdcard"]                   = true;
     payload["print"]["support_flow_calibration"] = flow_calibration;
+    payload["print"]["support_timelapse"]        = supports_timelapse();
 
     // Moonraker doesn't provide temperature ranges via API - use hardcoded defaults
     payload["print"]["nozzle_temp_range"] = {100, 370}; // Typical Klipper range

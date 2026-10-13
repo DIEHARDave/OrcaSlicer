@@ -107,9 +107,10 @@ protected:
     // SDCARD_PRINT_FILE; agents whose firmware takes per-print options override it.
     virtual int start_uploaded_print(const PrintParams& params, const std::string& filename);
 
-    // Whether the print dialog offers flow calibration; only meaningful when start_uploaded_print()
-    // passes the dialog's choice on to the firmware.
+    // Whether the print dialog offers flow calibration and timelapse; only meaningful when
+    // start_uploaded_print() passes the dialog's choices on to the firmware.
     virtual bool supports_flow_calibration() const { return false; }
+    virtual bool supports_timelapse() const { return false; }
 
     // One JSON-RPC request over a short-lived websocket, for methods Moonraker registers for
     // websocket clients only. On success `result` holds the response's result (or error) object.
