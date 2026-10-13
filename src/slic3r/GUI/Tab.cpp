@@ -2018,7 +2018,7 @@ void Tab::on_value_change(const std::string& opt_key, const boost::any& value)
     }
 
 
-    if (opt_key == "single_extruder_multi_material" || opt_key == "firmware_tool_remapping"){
+    if (opt_key == "single_extruder_multi_material" || opt_key == "filament_tool_mapping"){
         wxGetApp().sidebar().show_SEMM_buttons();
         wxGetApp().get_tab(Preset::TYPE_PRINT)->update();
     }
@@ -2090,7 +2090,7 @@ void Tab::on_value_change(const std::string& opt_key, const boost::any& value)
     }
 
 
-    if (opt_key == "single_extruder_multi_material" || opt_key == "firmware_tool_remapping"){
+    if (opt_key == "single_extruder_multi_material" || opt_key == "filament_tool_mapping"){
         wxGetApp().sidebar().show_SEMM_buttons();
         wxGetApp().get_tab(Preset::TYPE_PRINT)->update();
     }
@@ -5804,7 +5804,7 @@ if (is_marlin_flavor)
         def.mode    = comAdvanced;
         Option option(def, "extruders_count");
         optgroup->append_single_option_line(option, "printer_multimaterial_setup#extruders");
-        optgroup->append_single_option_line("firmware_tool_remapping");
+        optgroup->append_single_option_line("filament_tool_mapping");
 
         // Orca: rebuild missed extruder pages
         optgroup->m_on_change = [this, optgroup_wk = ConfigOptionsGroupWkp(optgroup)](t_config_option_key opt_key, boost::any value) {
@@ -7474,10 +7474,10 @@ bool Tab::select_preset(
 
         // Orca: update presets for the selected printer
         if (m_type == Preset::TYPE_PRINTER && wxGetApp().app_config->get_bool("remember_printer_config")) {
-            // A printer whose firmware maps tools takes any number of filaments, so a loaded project
+            // A printer that maps filaments to tools takes any number of filaments, so a loaded project
             // keeps its own: swapping in the list remembered for this printer would drop the slots
             // the painted or assigned objects use.
-            const auto *remap = m_presets->get_edited_preset().config.option<ConfigOptionBool>("firmware_tool_remapping");
+            const auto *remap = m_presets->get_edited_preset().config.option<ConfigOptionBool>("filament_tool_mapping");
             const bool  keep_project_filaments = remap && remap->value && !wxGetApp().plater()->model().objects.empty();
             m_preset_bundle->update_selections(*wxGetApp().app_config, keep_project_filaments);
             wxGetApp().plater()->sidebar().on_filament_count_change(m_preset_bundle->filament_presets.size());

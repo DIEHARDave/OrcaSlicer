@@ -240,23 +240,12 @@ int SnapmakerPrinterAgent::start_uploaded_print(const PrintParams& params, const
 {
     // The G-code names tools by filament index (T0..Tn), and the U1 firmware routes each of those
     // logical tools to a physical one through print_task_config.extruder_map_table. This is what
-    // lets a project hold more filaments than the printer has tools. The print dialog's mapping
-    // arrives as a JSON array indexed by filament, holding the tray id the filament was matched to,
-    // or -1 when it is unused. fetch_filament_info() reports one unit of slots, so the tray id is
-    // the physical tool index.
+    // lets a project hold more filaments than the printer has tools.
     nlohmann::json map_table = nlohmann::json::array();
     std::set<int>  used_tools;
-    auto           mapping = nlohmann::json::parse(params.ams_mapping, nullptr, false);
-    if (mapping.is_array()) {
-        for (size_t filament = 0; filament < mapping.size(); ++filament) {
-            if (!mapping[filament].is_number_integer())
-                continue;
-            const int tool = mapping[filament].get<int>();
-            if (tool < 0 || tool >= MAX_U1_TOOLS)
-                continue;
-            map_table.push_back(nlohmann::json::array({int(filament), tool}));
-            used_tools.insert(tool);
-        }
+    for (const auto& [filament, tool] : parse_tool_mapping(params.ams_mapping, MAX_U1_TOOLS)) {
+        map_table.push_back(nlohmann::json::array({filament, tool}));
+        used_tools.insert(tool);
     }
 
     // Firmware 1.3.0 and later take the mapping and the dialog's switches as options of the print
