@@ -367,9 +367,12 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
 
     // The print dialog hands over the plate as a .gcode.3mf bundle; Klipper needs the plain G-code
     // inside it, or it reads the zip as G-code and aborts on the first "command".
+    // Extract next to the bundle under a name of our own: the plate's live .gcode sits beside it
+    // under the bundle's stem, and Orca holds that file open.
+    fs::path extracted;
     if (boost::iends_with(gcode_path, ".3mf")) {
-        fs::path extracted = source_path;
-        extracted.replace_extension(".gcode");
+        extracted = source_path;
+        extracted.replace_extension(".upload.gcode");
         if (!extract_plate_gcode(gcode_path, extracted.string())) {
             BOOST_LOG_TRIVIAL(error) << "MoonrakerPrinterAgent: no plate G-code in " << gcode_path;
             return BAMBU_NETWORK_ERR_FILE_NOT_EXIST;
@@ -390,7 +393,12 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
     // Upload file
     if (update_fn)
         update_fn(PrintingStageUpload, 0, _u8L("Uploading G-code..."));
-    if (!upload_gcode(gcode_path, upload_filename, device_info.base_url, device_info.api_key, update_fn, cancel_fn)) {
+    const bool uploaded = upload_gcode(gcode_path, upload_filename, device_info.base_url, device_info.api_key, update_fn, cancel_fn);
+    if (!extracted.empty()) {
+        boost::system::error_code ec;
+        fs::remove(extracted, ec);
+    }
+    if (!uploaded) {
         return BAMBU_NETWORK_ERR_PRINT_LP_UPLOAD_FTP_FAILED;
     }
 
