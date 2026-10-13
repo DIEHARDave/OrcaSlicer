@@ -103,9 +103,19 @@ protected:
     virtual bool init_device_info(const std::string& dev_id, const std::string& dev_ip, const std::string& username, const std::string& password, bool use_ssl, const std::string& port);
     virtual bool fetch_device_info(const std::string& base_url, const std::string& api_key, MoonrakerDeviceInfo& info, std::string& error) const;
 
-    // G-code sent after the upload and before the print starts, e.g. to hand the print dialog's
-    // filament mapping to the firmware. Empty means nothing is sent.
-    virtual std::string pre_print_gcode(const PrintParams& params) const { return {}; }
+    // Starts printing a file already uploaded to the gcodes root. The default selects it with
+    // SDCARD_PRINT_FILE; agents whose firmware takes per-print options override it.
+    virtual int start_uploaded_print(const PrintParams& params, const std::string& filename);
+
+    // Whether the print dialog offers flow calibration; only meaningful when start_uploaded_print()
+    // passes the dialog's choice on to the firmware.
+    virtual bool supports_flow_calibration() const { return false; }
+
+    // One JSON-RPC request over a short-lived websocket, for methods Moonraker registers for
+    // websocket clients only. On success `result` holds the response's result (or error) object.
+    bool call_jsonrpc_ws(const std::string& method, const nlohmann::json& params, nlohmann::json& result, std::string& error) const;
+
+    bool send_gcode_sync(const std::string& dev_id, const std::string& gcode) const;
 
     // State access for derived classes
     mutable std::recursive_mutex       state_mutex;
@@ -129,7 +139,6 @@ private:
 
     bool fetch_object_list(const std::string& base_url, const std::string& api_key, std::set<std::string>& objects, std::string& error) const;
     bool query_printer_status(const std::string& base_url, const std::string& api_key, nlohmann::json& status, std::string& error) const;
-    bool send_gcode_sync(const std::string& dev_id, const std::string& gcode) const;
     void send_gcode_async(const std::string& dev_id, const std::string& gcode,
                           std::function<void(bool)> on_result = {}) const;
 
