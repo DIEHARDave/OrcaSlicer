@@ -103,6 +103,10 @@ protected:
     virtual bool init_device_info(const std::string& dev_id, const std::string& dev_ip, const std::string& username, const std::string& password, bool use_ssl, const std::string& port);
     virtual bool fetch_device_info(const std::string& base_url, const std::string& api_key, MoonrakerDeviceInfo& info, std::string& error) const;
 
+    // G-code sent after the upload and before the print starts, e.g. to hand the print dialog's
+    // filament mapping to the firmware. Empty means nothing is sent.
+    virtual std::string pre_print_gcode(const PrintParams& params) const { return {}; }
+
     // State access for derived classes
     mutable std::recursive_mutex       state_mutex;
 
