@@ -6554,7 +6554,7 @@ bool Sidebar::should_show_SEMM_buttons()
 }
 
 // Orca: the filament list can be resized by hand unless every filament is pinned to its own
-// nozzle. Differs from should_show_SEMM_buttons() for a tool changer whose firmware remaps tools:
+// nozzle. Differs from should_show_SEMM_buttons() for a tool changer that maps filaments to tools at print time:
 // it gets add/delete/merge, but no flushing volumes since each filament keeps its own nozzle.
 bool Sidebar::can_edit_filament_list()
 {
@@ -6570,8 +6570,8 @@ void Sidebar::show_SEMM_buttons()
 
     bool is_multi_material = p->combos_filament.size() > 1;
     bool editable  = can_edit_filament_list();
-    bool is_single = editable && !is_multi_material; // SINGLE EXTRUDER / BBL / REMAPPING TOOLCHANGER WITH 1 MATERIAL
-    bool is_multi  = editable && is_multi_material;  // MULTI MATERIAL WITH SINGLE EXTRUDER OR REMAPPING TOOLCHANGER
+    bool is_single = editable && !is_multi_material; // SINGLE EXTRUDER / BBL / MAPPING TOOLCHANGER WITH 1 MATERIAL
+    bool is_multi  = editable && is_multi_material;  // MULTI MATERIAL WITH SINGLE EXTRUDER OR MAPPING TOOLCHANGER
     bool is_fixed  = !is_single && !is_multi;        // MULTI EXTRUDER / TOOLCHANGER / IDEX WITH FIXED MATERIAL
 
     p->m_bpButton_add_filament->Show(editable);

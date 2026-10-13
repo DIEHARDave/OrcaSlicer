@@ -1794,7 +1794,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionString,              machine_start_gcode))
     ((ConfigOptionStrings,             filament_start_gcode))
     ((ConfigOptionBool,                single_extruder_multi_material))
-    ((ConfigOptionBool,                firmware_tool_remapping))
+    ((ConfigOptionBool,                filament_tool_mapping))
     ((ConfigOptionBool,                manual_filament_change))
     // IDEX/IQEX (independent X extruder) — parallel printing support for IDEX/IQEX printers
     ((ConfigOptionBool,                is_imex))
@@ -2704,7 +2704,7 @@ double nozzle_diameter_for_filament(const PrintConfig& config, int filament_id, 
 
 // True for a tool changer that feeds filament N from nozzle N, so the nozzle count caps the
 // physical filament count. False for single-extruder multi-material printers and for tool
-// changers whose firmware maps G-code tool numbers to physical tools (firmware_tool_remapping).
+// changers that assign filaments to tools when the print is sent (filament_tool_mapping).
 bool filament_count_follows_extruders(const DynamicPrintConfig& printer_config);
 
 } // namespace Slic3r

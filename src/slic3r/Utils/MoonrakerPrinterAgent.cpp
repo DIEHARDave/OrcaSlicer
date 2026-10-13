@@ -6,6 +6,8 @@
 #include "libslic3r/Preset.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/miniz_extension.hpp"
+#include "libslic3r/GCode/ToolRemap.hpp"
+#include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/Utils.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/I18N.hpp"
@@ -35,6 +37,7 @@
 #include <boost/beast/websocket/rfc6455.hpp>
 #include <boost/beast/websocket/error.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/nowide/fstream.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/log/trivial.hpp>
@@ -44,6 +47,7 @@
 #include <cctype>
 #include <ios>
 #include <functional>
+#include <iterator>
 #include <exception>
 #include <map>
 #include <string>
@@ -381,6 +385,19 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
         source_path = extracted;
     }
 
+    // A tool changer that assigns filaments to tools at print time, on firmware that cannot remap
+    // tool numbers itself: renumber the tools to the physical ones the print dialog chose.
+    fs::path remapped;
+    if (const auto tool_map = upload_tool_map(params); !tool_map.empty()) {
+        remapped = source_path;
+        remapped.replace_extension(".mapped.gcode");
+        if (!write_remapped_gcode(gcode_path, remapped.string(), tool_map)) {
+            BOOST_LOG_TRIVIAL(error) << "MoonrakerPrinterAgent: failed to renumber tools into " << remapped.string();
+            return BAMBU_NETWORK_ERR_FILE_NOT_EXIST;
+        }
+        gcode_path = remapped.string();
+    }
+
     // Extract filename for upload (relative to gcodes root); prefer the job name the dialog shows
     // over the temp file's name.
     std::string upload_filename = params.project_name.empty() ? source_path.filename().string() : params.project_name;
@@ -394,9 +411,10 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
     if (update_fn)
         update_fn(PrintingStageUpload, 0, _u8L("Uploading G-code..."));
     const bool uploaded = upload_gcode(gcode_path, upload_filename, device_info.base_url, device_info.api_key, update_fn, cancel_fn);
-    if (!extracted.empty()) {
+    for (const fs::path& temp : {extracted, remapped}) {
         boost::system::error_code ec;
-        fs::remove(extracted, ec);
+        if (!temp.empty())
+            fs::remove(temp, ec);
     }
     if (!uploaded) {
         return BAMBU_NETWORK_ERR_PRINT_LP_UPLOAD_FTP_FAILED;
@@ -419,6 +437,48 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
     if (update_fn)
         update_fn(PrintingStageFinished, 100, _u8L("Print started"));
     return BAMBU_NETWORK_SUCCESS;
+}
+
+std::map<int, int> MoonrakerPrinterAgent::parse_tool_mapping(const std::string& ams_mapping, int tool_count)
+{
+    // The dialog's array is indexed by filament and holds the tray each filament was matched to,
+    // or -1 when it is unused. Moonraker agents report one tray per tool, so a tray id is a tool.
+    std::map<int, int> tool_map;
+    const auto         mapping = nlohmann::json::parse(ams_mapping, nullptr, false);
+    if (!mapping.is_array())
+        return tool_map;
+    for (size_t filament = 0; filament < mapping.size(); ++filament) {
+        if (!mapping[filament].is_number_integer())
+            continue;
+        const int tool = mapping[filament].get<int>();
+        if (tool >= 0 && tool < tool_count)
+            tool_map[int(filament)] = tool;
+    }
+    return tool_map;
+}
+
+std::map<int, int> MoonrakerPrinterAgent::upload_tool_map(const PrintParams& params) const
+{
+    if (firmware_maps_tools() || !GUI::wxGetApp().preset_bundle)
+        return {};
+    const DynamicPrintConfig& printer = GUI::wxGetApp().preset_bundle->printers.get_edited_preset().config;
+    const auto*               mapping = printer.option<ConfigOptionBool>("filament_tool_mapping");
+    const auto*               nozzles = printer.option<ConfigOptionFloats>("nozzle_diameter");
+    if (mapping == nullptr || !mapping->value || nozzles == nullptr)
+        return {};
+    return parse_tool_mapping(params.ams_mapping, int(nozzles->size()));
+}
+
+bool MoonrakerPrinterAgent::write_remapped_gcode(const std::string& source, const std::string& target, const std::map<int, int>& tool_map) const
+{
+    boost::nowide::ifstream in(source, std::ios::binary);
+    if (!in)
+        return false;
+    const std::string gcode((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const std::string remapped = remap_gcode_tools(gcode, tool_map, [this, &tool_map](std::string& line) { rewrite_mapped_comment(line, tool_map); });
+    boost::nowide::ofstream out(target, std::ios::binary);
+    out.write(remapped.data(), std::streamsize(remapped.size()));
+    return bool(out);
 }
 
 int MoonrakerPrinterAgent::start_uploaded_print(const PrintParams& /*params*/, const std::string& filename)
