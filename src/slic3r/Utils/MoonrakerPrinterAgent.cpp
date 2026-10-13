@@ -363,6 +363,10 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
     // Start print via gcode script (simpler than JSON-RPC)
     if (update_fn)
         update_fn(PrintingStageSending, 0, "Starting print...");
+    if (const std::string setup = pre_print_gcode(params); !setup.empty() && !send_gcode_sync(device_info.dev_id, setup)) {
+        BOOST_LOG_TRIVIAL(error) << "MoonrakerPrinterAgent: pre-print G-code failed: " << setup;
+        return BAMBU_NETWORK_ERR_PRINT_LP_PUBLISH_MSG_FAILED;
+    }
     std::string gcode = "SDCARD_PRINT_FILE FILENAME=" + upload_filename;
     if (!send_gcode_sync(device_info.dev_id, gcode)) {
         return BAMBU_NETWORK_ERR_PRINT_LP_PUBLISH_MSG_FAILED;

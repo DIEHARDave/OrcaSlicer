@@ -7,6 +7,7 @@
 
 #include "nlohmann/json.hpp"
 #include <boost/log/trivial.hpp>
+#include <set>
 #include <vector>
 #include <string>
 #include "libslic3r/Preset.hpp"
@@ -18,6 +19,9 @@ namespace Slic3r {
 namespace {
 
 constexpr const char* SNAPMAKER_AGENT_VERSION = "0.0.1";
+
+// Physical tools on the U1; a tray id past this is not a toolhead the firmware can map to.
+constexpr int MAX_U1_TOOLS = 4;
 
 // Safely access a parallel array by index, returning a fallback if out of bounds.
 template<typename T>
@@ -230,6 +234,41 @@ bool SnapmakerPrinterAgent::fetch_filament_info(std::string dev_id, FilamentSync
 
     build_ams_payload(1, slot_count - 1, trays);
     return true;
+}
+
+std::string SnapmakerPrinterAgent::pre_print_gcode(const PrintParams& params) const
+{
+    // The G-code names tools by filament index (T0..Tn), and the U1 firmware routes each of those
+    // logical tools to a physical one through print_task_config.extruder_map_table. This is what
+    // lets a project hold more filaments than the printer has tools. The print dialog's mapping
+    // arrives as a JSON array indexed by filament, holding the tray id the filament was matched to,
+    // or -1 when it is unused. fetch_filament_info() reports one unit of slots, so the tray id is
+    // the physical tool index.
+    auto mapping = nlohmann::json::parse(params.ams_mapping, nullptr, false);
+    if (!mapping.is_array())
+        return {};
+
+    std::string      gcode;
+    std::set<int>    used_tools;
+    for (size_t filament = 0; filament < mapping.size(); ++filament) {
+        if (!mapping[filament].is_number_integer())
+            continue;
+        const int tool = mapping[filament].get<int>();
+        if (tool < 0 || tool >= MAX_U1_TOOLS)
+            continue;
+        gcode += "SET_PRINT_EXTRUDER_MAP CONFIG_EXTRUDER=" + std::to_string(filament) + " MAP_EXTRUDER=" + std::to_string(tool) + "\n";
+        used_tools.insert(tool);
+    }
+    if (used_tools.empty())
+        return {};
+
+    std::string tools;
+    for (int tool : used_tools)
+        tools += (tools.empty() ? "" : ",") + std::to_string(tool);
+    gcode += "SET_PRINT_USED_EXTRUDERS EXTRUDERS=" + tools;
+
+    BOOST_LOG_TRIVIAL(info) << "SnapmakerPrinterAgent: filament to tool mapping:\n" << gcode;
+    return gcode;
 }
 
 } // namespace Slic3r

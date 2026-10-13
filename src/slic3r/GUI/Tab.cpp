@@ -2018,7 +2018,7 @@ void Tab::on_value_change(const std::string& opt_key, const boost::any& value)
     }
 
 
-    if (opt_key == "single_extruder_multi_material"  ){
+    if (opt_key == "single_extruder_multi_material" || opt_key == "firmware_tool_remapping"){
         wxGetApp().sidebar().show_SEMM_buttons();
         wxGetApp().get_tab(Preset::TYPE_PRINT)->update();
     }
@@ -2090,7 +2090,7 @@ void Tab::on_value_change(const std::string& opt_key, const boost::any& value)
     }
 
 
-    if (opt_key == "single_extruder_multi_material"  ){
+    if (opt_key == "single_extruder_multi_material" || opt_key == "firmware_tool_remapping"){
         wxGetApp().sidebar().show_SEMM_buttons();
         wxGetApp().get_tab(Preset::TYPE_PRINT)->update();
     }
@@ -2343,8 +2343,8 @@ void Tab::on_value_change(const std::string& opt_key, const boost::any& value)
     }
 
 
-    //Orca: sync filament num if it's a multi tool printer
-    if (opt_key == "extruders_count" && !m_config->opt_bool("single_extruder_multi_material")){
+    //Orca: sync filament num if it's a multi tool printer that pins filament N to nozzle N
+    if (opt_key == "extruders_count" && filament_count_follows_extruders(*m_config)){
         const size_t num_extruder = boost::any_cast<size_t>(value);
         auto        *bundle       = wxGetApp().preset_bundle;
         Sidebar     &sidebar      = wxGetApp().plater()->sidebar();
@@ -5804,6 +5804,7 @@ if (is_marlin_flavor)
         def.mode    = comAdvanced;
         Option option(def, "extruders_count");
         optgroup->append_single_option_line(option, "printer_multimaterial_setup#extruders");
+        optgroup->append_single_option_line("firmware_tool_remapping");
 
         // Orca: rebuild missed extruder pages
         optgroup->m_on_change = [this, optgroup_wk = ConfigOptionsGroupWkp(optgroup)](t_config_option_key opt_key, boost::any value) {
