@@ -1665,3 +1665,27 @@ TEST_CASE("Default options of enum lists get their definition's keys map", "[Con
     }
     CHECK(enum_lists > 0);
 }
+
+TEST_CASE("Only a tool changer without firmware tool remapping ties the filament count to its nozzles", "[Config]")
+{
+    // A plain tool changer feeds filament N from nozzle N, so its nozzle count caps the filaments.
+    // A SEMM printer, or a tool changer whose firmware maps G-code tools to physical ones, does not.
+    const bool semm  = GENERATE(false, true);
+    const bool remap = GENERATE(false, true);
+
+    DynamicPrintConfig printer_config;
+    printer_config.set_key_value("single_extruder_multi_material", new ConfigOptionBool(semm));
+    printer_config.set_key_value("firmware_tool_remapping", new ConfigOptionBool(remap));
+
+    INFO("single_extruder_multi_material = " << semm << ", firmware_tool_remapping = " << remap);
+    CHECK(filament_count_follows_extruders(printer_config) == (!semm && !remap));
+}
+
+TEST_CASE("A printer config without the remapping key keeps tool changers tied to their nozzles", "[Config]")
+{
+    // Printer profiles written before firmware_tool_remapping existed must behave as before.
+    DynamicPrintConfig printer_config;
+    printer_config.set_key_value("single_extruder_multi_material", new ConfigOptionBool(false));
+
+    CHECK(filament_count_follows_extruders(printer_config));
+}
