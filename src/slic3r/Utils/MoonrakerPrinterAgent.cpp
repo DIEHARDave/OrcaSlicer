@@ -411,32 +411,35 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
     // Sanitize filename to prevent path traversal attacks (extra safety)
     upload_filename = sanitize_filename(upload_filename);
 
-    // Upload file
-    if (update_fn)
-        update_fn(PrintingStageUpload, 0, "Uploading G-code...");
-    const bool uploaded = upload_gcode(gcode_path, upload_filename, device_info.base_url, device_info.api_key, update_fn, cancel_fn);
+    const int result = upload_and_start(params, gcode_path, upload_filename, update_fn, cancel_fn);
     for (const fs::path& temp : {extracted, remapped}) {
         boost::system::error_code ec;
         if (!temp.empty())
             fs::remove(temp, ec);
     }
-    if (!uploaded) {
+    if (result == BAMBU_NETWORK_SUCCESS && update_fn)
+        update_fn(PrintingStageFinished, 100, "Print started");
+    return result;
+}
+
+int MoonrakerPrinterAgent::upload_and_start(const PrintParams&      params,
+                                            const std::string&      gcode_path,
+                                            const std::string&      filename,
+                                            const OnUpdateStatusFn& update_fn,
+                                            const WasCancelledFn&   cancel_fn)
+{
+    if (update_fn)
+        update_fn(PrintingStageUpload, 0, "Uploading G-code...");
+    if (!upload_gcode(gcode_path, filename, device_info.base_url, device_info.api_key, update_fn, cancel_fn))
         return BAMBU_NETWORK_ERR_PRINT_LP_UPLOAD_FTP_FAILED;
-    }
 
     // Check cancellation
-    if (cancel_fn && cancel_fn()) {
+    if (cancel_fn && cancel_fn())
         return BAMBU_NETWORK_ERR_CANCELED;
-    }
 
     if (update_fn)
         update_fn(PrintingStageSending, 0, "Starting print...");
-    if (const int result = start_uploaded_print(params, upload_filename); result != BAMBU_NETWORK_SUCCESS)
-        return result;
-
-    if (update_fn)
-        update_fn(PrintingStageFinished, 100, "Print started");
-    return BAMBU_NETWORK_SUCCESS;
+    return start_uploaded_print(params, filename);
 }
 
 std::map<int, int> MoonrakerPrinterAgent::parse_tool_mapping(const std::string& ams_mapping, int tool_count)

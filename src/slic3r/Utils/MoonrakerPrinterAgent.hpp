@@ -104,6 +104,15 @@ protected:
     virtual bool init_device_info(const std::string& dev_id, const std::string& dev_ip, const std::string& username, const std::string& password, bool use_ssl, const std::string& port);
     virtual bool fetch_device_info(const std::string& base_url, const std::string& api_key, MoonrakerDeviceInfo& info, std::string& error) const;
 
+    // Sends the prepared G-code at `gcode_path` to the printer as `filename` and starts it. The
+    // default uploads through Moonraker and calls start_uploaded_print(); an agent whose firmware
+    // takes prints another way overrides it.
+    virtual int upload_and_start(const PrintParams&      params,
+                                 const std::string&      gcode_path,
+                                 const std::string&      filename,
+                                 const OnUpdateStatusFn& update_fn,
+                                 const WasCancelledFn&   cancel_fn);
+
     // Starts printing a file already uploaded to the gcodes root. The default selects it with
     // SDCARD_PRINT_FILE; agents whose firmware takes per-print options override it.
     virtual int start_uploaded_print(const PrintParams& params, const std::string& filename);
