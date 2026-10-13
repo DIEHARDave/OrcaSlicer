@@ -146,6 +146,23 @@ int ZmodPrinterAgent::upload_and_start(const PrintParams&      params,
     return upload_to_flashforge_app(params, gcode_path, filename, status, update_fn, cancel_fn);
 }
 
+std::string ZmodPrinterAgent::flashforge_app_host() const
+{
+    // Flashforge's app serves its API on the Wi-Fi interface only, so a printer reached through a
+    // wired adapter is not reachable there on the address the agent uses; Zmod itself posts to
+    // wlan0's address for the same reason.
+    std::string body;
+    if (moonraker_get("/machine/system_info", body)) {
+        const auto json = nlohmann::json::parse(body, nullptr, false);
+        const auto ptr  = nlohmann::json::json_pointer("/result/system_info/network/wlan0/ip_addresses");
+        if (!json.is_discarded() && json.contains(ptr) && json[ptr].is_array())
+            for (const auto& address : json[ptr])
+                if (address.is_object() && address.value("family", "") == "ipv4" && !address.value("address", "").empty())
+                    return address.value("address", "");
+    }
+    return device_info.base_url;
+}
+
 int ZmodPrinterAgent::upload_to_flashforge_app(const PrintParams&      params,
                                                const std::string&      gcode_path,
                                                const std::string&      filename,
@@ -184,7 +201,7 @@ int ZmodPrinterAgent::upload_to_flashforge_app(const PrintParams&      params,
     }
 
     DynamicPrintConfig host_config;
-    host_config.set_key_value("print_host", new ConfigOptionString(device_info.base_url));
+    host_config.set_key_value("print_host", new ConfigOptionString(flashforge_app_host()));
     host_config.set_key_value("flashforge_serial_number", new ConfigOptionString(serial_number));
     host_config.set_key_value("printhost_apikey", new ConfigOptionString(check_code));
     const Flashforge flashforge(&host_config);
