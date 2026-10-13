@@ -40,6 +40,8 @@ private:
     bool           moonraker_get(const std::string& path, std::string& body) const;
     // Zmod's zmod_color status: its slots, and whether Flashforge's screen runs ("display").
     nlohmann::json zmod_color_status() const;
+    // Where Flashforge's app serves its local API: the printer's Wi-Fi address.
+    std::string flashforge_app_host() const;
     // Slot index (0-based) for each tool number of the uploaded file.
     std::map<int, int> tool_slots(const PrintParams& params) const;
     int                upload_to_flashforge_app(const PrintParams&      params,
