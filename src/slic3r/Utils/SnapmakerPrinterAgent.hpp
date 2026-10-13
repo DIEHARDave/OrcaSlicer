@@ -19,7 +19,8 @@ public:
     bool fetch_filament_info(std::string dev_id, FilamentSyncMode sync_mode = FilamentSyncMode::pull) override;
 
 protected:
-    std::string pre_print_gcode(const PrintParams& params) const override;
+    int  start_uploaded_print(const PrintParams& params, const std::string& filename) override;
+    bool supports_flow_calibration() const override { return true; }
 
 private:
     // Combine filament_type + filament_sub_type into a unified type string

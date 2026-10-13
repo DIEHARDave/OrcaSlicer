@@ -405,21 +405,77 @@ int MoonrakerPrinterAgent::start_local_print(PrintParams params, OnUpdateStatusF
         return BAMBU_NETWORK_ERR_CANCELED;
     }
 
-    // Start print via gcode script (simpler than JSON-RPC)
     if (update_fn)
         update_fn(PrintingStageSending, 0, "Starting print...");
-    if (const std::string setup = pre_print_gcode(params); !setup.empty() && !send_gcode_sync(device_info.dev_id, setup)) {
-        BOOST_LOG_TRIVIAL(error) << "MoonrakerPrinterAgent: pre-print G-code failed: " << setup;
-        return BAMBU_NETWORK_ERR_PRINT_LP_PUBLISH_MSG_FAILED;
-    }
-    std::string gcode = "SDCARD_PRINT_FILE FILENAME=" + upload_filename;
-    if (!send_gcode_sync(device_info.dev_id, gcode)) {
-        return BAMBU_NETWORK_ERR_PRINT_LP_PUBLISH_MSG_FAILED;
-    }
+    if (const int result = start_uploaded_print(params, upload_filename); result != BAMBU_NETWORK_SUCCESS)
+        return result;
 
     if (update_fn)
         update_fn(PrintingStageFinished, 100, "Print started");
     return BAMBU_NETWORK_SUCCESS;
+}
+
+int MoonrakerPrinterAgent::start_uploaded_print(const PrintParams& /*params*/, const std::string& filename)
+{
+    // Start print via gcode script (simpler than JSON-RPC)
+    if (!send_gcode_sync(device_info.dev_id, "SDCARD_PRINT_FILE FILENAME=" + filename))
+        return BAMBU_NETWORK_ERR_PRINT_LP_PUBLISH_MSG_FAILED;
+    return BAMBU_NETWORK_SUCCESS;
+}
+
+bool MoonrakerPrinterAgent::call_jsonrpc_ws(const std::string& method, const nlohmann::json& params, nlohmann::json& result, std::string& error) const
+{
+    WsEndpoint endpoint;
+    if (!parse_ws_endpoint(device_info.base_url, endpoint) || endpoint.secure) {
+        error = "unsupported websocket endpoint for " + device_info.base_url;
+        return false;
+    }
+
+    try {
+        net::io_context   ioc;
+        tcp::resolver     resolver{ioc};
+        beast::tcp_stream stream{ioc};
+        stream.expires_after(std::chrono::seconds(10));
+        stream.connect(resolver.resolve(endpoint.host, endpoint.port));
+
+        websocket::stream<beast::tcp_stream> ws{std::move(stream)};
+        const std::string api_key = device_info.api_key;
+        ws.set_option(websocket::stream_base::decorator([&api_key](websocket::request_type& req) {
+            req.set(http::field::user_agent, "OrcaSlicer");
+            if (!api_key.empty())
+                req.set("X-Api-Key", api_key);
+        }));
+        std::string host_header = endpoint.host;
+        if (endpoint.port != "80")
+            host_header += ":" + endpoint.port;
+        ws.handshake(host_header, endpoint.target);
+        ws.text(true);
+
+        constexpr int request_id = 1;
+        nlohmann::json request{{"jsonrpc", "2.0"}, {"method", method}, {"params", params}, {"id", request_id}};
+        ws.write(net::buffer(request.dump()));
+
+        // Moonraker interleaves status notifications; read until our reply arrives.
+        for (;;) {
+            beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(30));
+            beast::flat_buffer buffer;
+            ws.read(buffer);
+            auto reply = nlohmann::json::parse(beast::buffers_to_string(buffer.data()), nullptr, false);
+            if (!reply.is_object() || reply.value("id", -1) != request_id)
+                continue;
+            result = reply.contains("result") ? reply["result"] : reply.value("error", nlohmann::json::object());
+            beast::error_code ec;
+            ws.close(websocket::close_code::normal, ec);
+            if (reply.contains("error")) {
+                error = reply["error"].value("message", "JSON-RPC error");
+                return false;
+            }
+            return true;
+        }
+    } catch (const std::exception& e) {
+        error = e.what();
+        return false;
+    }
 }
 
 int MoonrakerPrinterAgent::start_sdcard_print(PrintParams params, OnUpdateStatusFn update_fn, WasCancelledFn cancel_fn)
@@ -1886,8 +1942,14 @@ nlohmann::json MoonrakerPrinterAgent::build_print_payload_locked() const
     // prints from its virtual_sdcard, which is always there, so report it present; otherwise the
     // print dialog blocks with "Storage needs to be inserted" between filament syncs.
     home_flag |= DevStorage::HAS_SDCARD_NORMAL << 8;
-    payload["print"]["home_flag"] = home_flag;
-    payload["print"]["sdcard"]    = true;
+    // Bit 16 and support_flow_calibration both set the printer's flow-calibration capability, so
+    // they have to agree or one push clears what the other set.
+    const bool flow_calibration = supports_flow_calibration();
+    if (flow_calibration)
+        home_flag |= 1 << 16;
+    payload["print"]["home_flag"]                = home_flag;
+    payload["print"]["sdcard"]                   = true;
+    payload["print"]["support_flow_calibration"] = flow_calibration;
 
     // Moonraker doesn't provide temperature ranges via API - use hardcoded defaults
     payload["print"]["nozzle_temp_range"] = {100, 370}; // Typical Klipper range
