@@ -7478,7 +7478,12 @@ bool Tab::select_preset(
 
         // Orca: update presets for the selected printer
         if (m_type == Preset::TYPE_PRINTER && wxGetApp().app_config->get_bool("remember_printer_config")) {
-            m_preset_bundle->update_selections(*wxGetApp().app_config);
+            // A printer whose firmware maps tools takes any number of filaments, so a loaded project
+            // keeps its own: swapping in the list remembered for this printer would drop the slots
+            // the painted or assigned objects use.
+            const auto *remap = m_presets->get_edited_preset().config.option<ConfigOptionBool>("firmware_tool_remapping");
+            const bool  keep_project_filaments = remap && remap->value && !wxGetApp().plater()->model().objects.empty();
+            m_preset_bundle->update_selections(*wxGetApp().app_config, keep_project_filaments);
             wxGetApp().plater()->sidebar().on_filament_count_change(m_preset_bundle->filament_presets.size());
         }
         load_current_preset();
