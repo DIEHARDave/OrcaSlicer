@@ -26,7 +26,6 @@ public:
 protected:
     int  start_uploaded_print(const PrintParams& params, const std::string& filename) override;
     bool supports_flow_calibration() const override { return true; }
-    void rewrite_mapped_comment(std::string& line, const std::map<int, int>& tool_map) const override;
 };
 
 } // namespace Slic3r

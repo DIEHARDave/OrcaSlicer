@@ -1,6 +1,5 @@
 #include "ToolRemap.hpp"
-
-#include <openssl/md5.h>
+#include "ZmodHeader.hpp"
 
 #include <cctype>
 #include <cstddef>
@@ -62,22 +61,6 @@ std::string remap_code(const std::string& code, const std::map<int, int>& tool_m
             out.append(token);
         }
         pos = end;
-    }
-    return out;
-}
-
-std::string md5_hex(const std::string& data)
-{
-    unsigned char digest[MD5_DIGEST_LENGTH];
-    MD5_CTX       ctx;
-    MD5_Init(&ctx);
-    MD5_Update(&ctx, data.data(), data.size());
-    MD5_Final(digest, &ctx);
-    static const char hex[] = "0123456789abcdef";
-    std::string       out;
-    for (unsigned char byte : digest) {
-        out += hex[byte >> 4];
-        out += hex[byte & 0xF];
     }
     return out;
 }
