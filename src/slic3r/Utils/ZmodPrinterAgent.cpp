@@ -3,12 +3,14 @@
 #include "Flashforge.hpp"
 #include "Http.hpp"
 #include "PrintHost.hpp"
-#include "libslic3r/GCode/ZmodHeader.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
 
 #include "nlohmann/json.hpp"
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
 #include <boost/log/trivial.hpp>
 
 #include <algorithm>
@@ -42,7 +44,7 @@ ZmodPrinterAgent::ZmodPrinterAgent(std::string log_dir) : MoonrakerPrinterAgent(
 
 AgentInfo ZmodPrinterAgent::get_agent_info_static()
 {
-    return AgentInfo{ZMOD_PRINTER_AGENT_ID, "Zmod (Flashforge)", ZMOD_AGENT_VERSION, "Flashforge printers running Zmod"};
+    return AgentInfo{"zmod", "Zmod (Flashforge)", ZMOD_AGENT_VERSION, "Flashforge printers running Zmod"};
 }
 
 bool ZmodPrinterAgent::moonraker_get(const std::string& path, std::string& body) const
@@ -266,6 +268,42 @@ int ZmodPrinterAgent::start_uploaded_print(const PrintParams& params, const std:
             BOOST_LOG_TRIVIAL(error) << "ZmodPrinterAgent: PRINT_ZCOLOR request failed";
     });
     return BAMBU_NETWORK_SUCCESS;
+}
+
+void ZmodPrinterAgent::rewrite_mapped_comment(std::string& line, const std::map<int, int>& tool_map) const
+{
+    // Zmod's preprocessor records the file's tools for the colour menu:
+    //   ; zmod_color_data = <tool,tool,...>|<colour per tool index>|<type per tool index>
+    // Renumber it like the tool changes, so a reprint from the printer still offers the right slots.
+    static const std::string key = "; zmod_color_data =";
+    if (line.compare(0, key.size(), key) != 0)
+        return;
+    std::vector<std::string> fields;
+    boost::split(fields, line.substr(key.size()), boost::is_any_of("|"));
+    if (fields.size() != 3)
+        return;
+    std::vector<std::string> tools, colours, types;
+    boost::split(tools, fields[0], boost::is_any_of(","));
+    boost::split(colours, fields[1], boost::is_any_of(","));
+    boost::split(types, fields[2], boost::is_any_of(","));
+
+    std::vector<std::string> new_tools, new_colours, new_types;
+    for (const std::string& token : tools) {
+        const int  tool   = std::atoi(token.c_str());
+        const auto mapped = tool_map.find(tool);
+        const int  target = mapped == tool_map.end() ? tool : mapped->second;
+        const auto name   = std::to_string(target);
+        if (std::find(new_tools.begin(), new_tools.end(), name) != new_tools.end())
+            continue; // several filaments on one tool: the first one names its colour
+        new_tools.push_back(name);
+        if (size_t(target) >= new_colours.size()) {
+            new_colours.resize(target + 1);
+            new_types.resize(target + 1);
+        }
+        new_colours[target] = size_t(tool) < colours.size() ? colours[tool] : std::string();
+        new_types[target]   = size_t(tool) < types.size() ? types[tool] : std::string();
+    }
+    line = key + " " + boost::join(new_tools, ",") + "|" + boost::join(new_colours, ",") + "|" + boost::join(new_types, ",");
 }
 
 } // namespace Slic3r

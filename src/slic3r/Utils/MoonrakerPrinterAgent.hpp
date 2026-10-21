@@ -140,6 +140,8 @@ protected:
     virtual bool firmware_maps_tools() const { return false; }
     // The renumbering applied to the uploaded G-code (empty when none is), see firmware_maps_tools().
     std::map<int, int> upload_tool_map(const PrintParams& params) const;
+    // Lets an agent update firmware-specific comment lines that list tool numbers.
+    virtual void rewrite_mapped_comment(std::string& /*line*/, const std::map<int, int>& /*tool_map*/) const {}
 
     // State access for derived classes
     mutable std::recursive_mutex       state_mutex;
@@ -179,9 +181,8 @@ private:
     int resume_print(const std::string& dev_id);
     int cancel_print(const std::string& dev_id);
 
-    // Writes `source` to `target` with the Zmod header added when asked, and its tools renumbered
-    // through `tool_map` when that is not empty.
-    bool write_prepared_gcode(const std::string& source, const std::string& target, const std::map<int, int>& tool_map, bool zmod_header) const;
+    // Writes `source` to `target` with its tools renumbered through `tool_map`.
+    bool write_remapped_gcode(const std::string& source, const std::string& target, const std::map<int, int>& tool_map) const;
 
     // File upload
     bool upload_gcode(const std::string& local_path, const std::string& filename,
