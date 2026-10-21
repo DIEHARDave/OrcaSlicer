@@ -296,8 +296,6 @@ set(lisbslic3r_sources
     GCode/ToolOrdering.hpp
     GCode/ToolRemap.cpp
     GCode/ToolRemap.hpp
-    GCode/ZmodHeader.cpp
-    GCode/ZmodHeader.hpp
     GCode/OrderingStrategies.cpp
     GCode/OrderingStrategies.hpp
     GCode/WipeTower2.cpp
