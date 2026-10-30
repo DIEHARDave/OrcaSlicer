@@ -1,6 +1,7 @@
 #include "SnapmakerPrinterAgent.hpp"
 #include "Http.hpp"
 #include "MoonrakerPrinterAgent.hpp"
+#include "bambu_networking.hpp"
 #include "IPrinterAgent.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
