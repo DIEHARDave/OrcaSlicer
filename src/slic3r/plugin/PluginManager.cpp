@@ -5,6 +5,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <exception>
 #include <functional>
+#include "libslic3r/Config.hpp"
 #include "libslic3r/LifecycleEvents.hpp"
 #include <memory>
 #include <optional>
